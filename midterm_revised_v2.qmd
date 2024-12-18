@@ -1,0 +1,760 @@
+---
+title: "Influence of Proximity to Railway on House Prices"
+subtitle: "36-617: Applied Linear Models"
+author: "Jason Andriopoulos, Yahan Yang"
+date: "2024-10-24"
+format: 
+  pdf:
+    documentclass: article
+    pdf-engine: xelatex
+    header-includes:
+      - \usepackage{indentfirst}
+      - \setlength{\parindent}{20pt}
+      - \usepackage{fontspec}
+      - \setmainfont{Calibri}
+      - \usepackage{geometry}
+      - \geometry{margin=1in}  # Set all margins to 1 inch (adjust as needed)
+editor: visual
+---
+
+## Executive Summary
+
+The project adopted a linear regression method to investigate the impact of proximity to rail trails on nearby residential property values in Northampton, Massachusetts in 2007. Using data including amenities, housing price, distance and other neighborhood factors, the research is aimed to detect whether distance determines house prices. The report uses linear model regression method to examine this problem.
+
+Key findings from our regression analysis indicate that distance to the rail trail negatively influences home prices. For every unit increase in distance from the trail, house prices decrease by approximately 6.39%. The confidence interval is between 3.26% and 9.52%. Other features are also influencing house price. Home square footage (with a 38.75% price increase for every 1000 sq. ft.) and number of bedrooms positively impact house prices (the influence is significant only for houses with 3 bedrooms), while the number of garage spaces and certain zip codes have lesser or no significance.
+
+In conclusion, the analysis reveals that rail trails appear to be a desirable feature for homebuyers, making them a significant consideration in real estate development strategies.
+
+## Introduction
+
+Since the late 19th century, the landscape of American transportation has seen many transformations. In the late 1800s and early 1900s, the United States introduced a significant expansion of rail lines which was used for connecting cities for both passenger and cargo services. These rail networks would soon become obsolete with the emergence of automobiles and the Interstate Highway System. More recently, many towns are seeing the conversion of these abandoned rail lines into a repurposed rail trail. These new rail trails offer neighborhoods new ways to enjoy their atmospheres through walking and biking on these new, long, continuous, and gentle slopes. We suspect this transformation has sparked interest in homeowners and may increase the desirability and value of nearby homes.
+
+This study aims to investigate the relationship between proximity to these new rail trails and residential property values in Northampton, Massachusetts. More specifically, we will answer Mr W. E. Coyote’s question: Are rail trails appealing to those looking to buy a home, and if so, what influence does the distance to a rail trail have on a given house’s value?
+
+This research is important because it can inform insights in real estate development strategies, and the public policies surrounding the decisions behind what to do with abandoned rail trails. Understanding economic impacts of these rail trails on home values can provide valuable insights for Acme Homes, LLC when setting home prices.
+
+\pagebreak
+
+## Data
+
+The data was collected from houses sold in Northampton, Massachusetts in 2007.  A new rail trail was opened in Northampton in 1984, offering an opportunity to compare the values of homes near the trail and farther from the trail.
+
+We start our statistical analysis with descriptive statistics to summarize the data. There are 104 observations and 20 variables in total. The dataset includes the following variables:
+
+-   housenum: The unique number for each house
+-   adj1998: The estimated house price from Zillow in 1998 (in thousands of 2014 USD)
+-   adj2007: The estimated house price from Zillow in 2007 (in thousands of 2014 USD)
+-   adj2011: The estimated house price from Zillow in 2011 (in thousands of 2014 USD)
+-   price1998: The estimated house price from Zillow in 1998 (in thousands of USD)
+-   price2007: The estimated house price from Zillow in 2007 (in thousands of USD)
+-   price2011: The estimated house price from Zillow in 2011 (in thousands of USD)
+-   distance: The distance (miles) to the nearest rail trail network
+-   acre: Number of acres of the given property
+-   bedrooms: Number of bedrooms in each property
+-   bikescore: The friendliness of biking in the area with a 0-100 scale.
+-   walkcore: The friendliness of walking in the area with a 0-100 scale.
+-   garage_spaces: Number of garage spaces in each property
+-   latitude: The latitude of the given property
+-   longitude: The longitude of the given property
+-   squarefeet: The square footage of a property's inside space
+-   streetname: The name of the street where the property is located
+-   streetno: The number of the house on a given street
+-   Zip: The zipcode of the given property (binary variable)\
+
+```{r echo = FALSE, message = FALSE, warning=FALSE}
+
+library(readxl)
+
+data <- read_excel("C:/Users/jandr/OneDrive/Documents/AppliedLinear/midterm/railway.xlsx")
+```
+
+Before conducting a formal Explotary Data Analysis (EDA), we plot a Directed Acyclic Graph (DAG) to visualize the relationships between various property characteristics and the adjusted house prices in 2007, with a focus on the impact of the distance to the rail trail.
+
+```{r fig.height = 3, fig.width = 6}
+#| echo: false
+#| fig-cap: "DAG of Variables of Interest"
+#| message: false
+#| warning: false
+
+library(ggdag)
+library(dplyr)
+library(gridExtra)
+library(grid) 
+library(ggplot2)
+
+# Define the DAG with descriptive variable names
+newdag <- dagify(
+  Price2007 ~ Distance + Squarefeet + GarageSpace + Zip + Bikescore + Acre + Walkscore,
+  Bikescore ~ Distance + Walkscore + Zip,
+  Bedrooms ~ Squarefeet,
+  Squarefeet ~ Acre
+)
+
+# Set position of nodes (ensure both x and y are provided)
+coords <- data.frame(
+  name = c("Distance", "Squarefeet", "Garage Space", "Zip", "Bikescore", "Walkscore", "Acre", "Price2007"),
+  x = c(1, 2, 3, 4, 5, 6, 7, 4),
+  y = c(4, 3, 2, 1, 2, 3, 4, 5)
+)
+
+# Apply the coordinates to the DAG
+# coordinates(newdag) <- coords
+
+# Create the DAG plot
+dag_plot <- ggdag(newdag) +
+  theme_dag() +
+  geom_dag_point(color = "black", size = 15, stroke = 1) +  # Smaller black circles for nodes
+  geom_dag_text(color = "white", size = 2, family = "serif") +  # White text inside the circles
+  geom_dag_edges(edge_color = "black", edge_width = 0.3) +  # Clean thin edges
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, family = "serif"),  # Center the title
+    plot.margin = margin(10, 20, 20, 20)  # Increase margins to prevent cutoff
+  )
+
+print(dag_plot)
+
+
+```
+
+The DAG provides an intuitive way to start analyzing the data. To proceed from here, some key relationships are worth noting in regards to the distance to the rail trail influences walk score and bike score. This makes sense because those scores are essentially calculated by how close they are to amenities, such as the rail trail. We also have reason to believe that square footage is impacted by the property size, which in turn has an impact on the number of bedrooms and garage spaces. We will investigate walk scores and bike scores with distance to rail trails to see if we have reasonable evidence to remove them from our final model.
+
+In our further analysis, we chose to exclude bike score and walk score from the regression model. These variables are highly correlated with the distance to the rail trail (see graph below), as they are calculated based on proximity to the rail trail itself.  Including them could introduce multicollinearity, leading to unreliable coefficient estimates. By focusing on the distance to the rail trail, we aim to provide a clearer and more interpretative model that accurately captures the relationship between proximity to the rail trail and house values.
+
+```{r echo = FALSE, message = FALSE, warning=FALSE, fig.height=3, fig.width=6}
+#| fig-cap: "Walk Score and Bike Score vs. Distance to Rail Trail"
+
+# Create the Walk Score vs. Distance plot
+walkscore_plot <- ggplot(data, aes(x = distance, y = walkscore)) +
+  geom_point(color = "black", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Walk Score vs Distance to Rail Trail",
+       x = "Distance to Rail Trail",
+       y = "Walk Score") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 8))
+
+# Create the Bike Score vs. Distance plot
+bikescore_plot <- ggplot(data, aes(x = distance, y = bikescore)) +
+  geom_point(color = "black", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "Bike Score vs Distance to Rail Trail",
+       x = "Distance to Rail Trail",
+       y = "Bike Score") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 8))
+
+# Arrange the plots side by side
+grid.arrange(walkscore_plot, bikescore_plot, ncol = 2)
+
+```
+
+Next, we examine the distributions of our response variables and covariates to ensure they are normally distributed. This step is crucial for validating the assumptions of our statistical models and ensuring the reliability of our analysis. More specific, the key assumption is for the observations to follow a normal distribution.
+
+```{r echo = FALSE, message = FALSE, warning=FALSE, fig.height=3, fig.width=6}
+#| fig-cap: "Histograms showing the distributions of key housing characteristics"
+library(patchwork)
+
+# Create the histogram for house value (adjusted price 2007)
+hist_adj2007 <- ggplot(data, aes(x = adj2007)) +
+  geom_histogram(binwidth = 25, fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "House Value",
+       x = "House Value",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for distance
+hist_distance <- ggplot(data, aes(x = distance)) +
+  geom_histogram(binwidth = 0.5, fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Distance to Rail Trail",
+       x = "Distance to Rail Trail",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for property size (acres)
+hist_acre <- ggplot(data, aes(x = acre)) +
+  geom_histogram(binwidth = 0.1, fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Property Size",
+       x = "Property Size (acres)",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for square footage
+hist_squarefeet <- ggplot(data, aes(x = squarefeet)) +
+  geom_histogram(binwidth = 0.25, fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Square Footage",
+       x = "Square Footage",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for number of bedrooms
+hist_bedrooms <- ggplot(data, aes(x = bedrooms)) +
+  geom_histogram(stat = "count", fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Number of Bedrooms",
+       x = "Number of Bedrooms",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for number of garage spaces
+hist_garage_spaces <- ggplot(data, aes(x = garage_spaces)) +
+  geom_histogram(stat = "count", fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Number of Garage Spaces",
+       x = "Number of Garage Spaces",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for ZIP code
+hist_zip <- ggplot(data, aes(x = as.factor(zip))) +
+  geom_histogram(stat = "count", fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "ZIP Code",
+       x = "ZIP Code",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Combine all histograms using patchwork
+combined_histograms <- (hist_adj2007 | hist_distance | hist_acre) / 
+                       (hist_squarefeet | hist_bedrooms | hist_garage_spaces | hist_zip)
+
+# Display the combined histograms
+print(combined_histograms)
+```
+
+We noticed from Figure 3 that all of our variables appear to be right-skewed. More concerningly, there are very few homes with 5 and 6 bedrooms, and only one home with 4 garages and none with 3 garages. This made us curious about the price distributions of these homes compared to homes with fewer bedrooms
+
+```{r echo = FALSE, fig.height = 3, fig.width = 6}
+#| warning: FALSE
+#| message: FALSE
+#| fig-cap: "House Prices vs. Distance to Rail Trail by Number of Bedrooms"
+
+# Create the scatter plot with a linear regression line
+ggplot(data, aes(x = distance, y = adj2007, color = as.factor(bedrooms))) +
+  geom_point() +  # Plot the points
+  geom_smooth(method = "loess", se = FALSE) + 
+  labs(
+    title = "House Price vs Distance Factored by Bedrooms",
+    x = "Distance to Rail Trail",
+    y = "Adjusted Price (2007)",
+    color = "Bedrooms"
+  ) +
+  theme_minimal() +  # Clean theme for the plot
+  theme(plot.title = element_text(hjust = 0.5, size = 14))  # Center the title
+
+```
+
+We can observe significant differences in price distribution for homes with 5 and 6 bedrooms compared with homes with 1 to 4 bedrooms. The curves for homes with 5 and 6 bedrooms, display much higher price variation compared to home with fewer bedrooms. This large fluctuation could indicate these homes are outliers, likely catering to a different segment of the housing market. Including these outliers would distort the results as they might not follow the same market trends as the majority of the homes.
+
+\pagebreak
+
+Since the primary goal of the study is to assess whether rail trails affect house prices, focusing on the more typical segment of the housing market (1 to 4 bedrooms) will provide a clearer and more accurate analysis. The price distribution for 1 to 4 bedrooms is more stable and consistent, allowing for a better understanding of how proximity to rail trails influences pricing. In addition to this, there are only 7 homes with more than 4 bedrooms so we do not lose too much information about the population. The limitation to this is that our study will be constrained to analyzing homes with less than 5 bedrooms. We will re-examine these histograms with the outliers removed. After removing the data points with bedrooms being 5 and 6, we observed that the many distributions become less right-skewed.
+
+```{r echo = FALSE, message = FALSE, warning=FALSE}
+# Remove rows with garage_spaces = 4 and bedrooms = 5 or 6
+data <- data[!(data$garage_spaces == 4 | data$bedrooms %in% c(5, 6)), ]
+```
+
+```{r echo = FALSE, message = FALSE, warning=FALSE}
+#| fig-cap: "Histograms of Variables of Interest (Excluding Bedroom = 5&6)"
+
+# Create the histogram for house value (adjusted price 2007)
+hist_adj2007 <- ggplot(data, aes(x = adj2007)) +
+  geom_histogram(binwidth = 25, fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "House Value",
+       x = "House Value",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for distance
+hist_distance <- ggplot(data, aes(x = distance)) +
+  geom_histogram(binwidth = 0.5, fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Distance to Rail Trail",
+       x = "Distance to Rail Trail",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for property size (acres)
+hist_acre <- ggplot(data, aes(x = acre)) +
+  geom_histogram(binwidth = 0.1, fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Property Size",
+       x = "Property Size (acres)",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for square footage
+hist_squarefeet <- ggplot(data, aes(x = squarefeet)) +
+  geom_histogram(binwidth = 0.25, fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Square Footage",
+       x = "Square Footage",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for number of bedrooms
+hist_bedrooms <- ggplot(data, aes(x = bedrooms)) +
+  geom_histogram(stat = "count", fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Number of Bedrooms",
+       x = "Number of Bedrooms",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for number of garage spaces
+hist_garage_spaces <- ggplot(data, aes(x = garage_spaces)) +
+  geom_histogram(stat = "count", fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Number of Garage Spaces",
+       x = "Number of Garage Spaces",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the histogram for ZIP code
+hist_zip <- ggplot(data, aes(x = as.factor(zip))) +
+  geom_histogram(stat = "count", fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "ZIP Code",
+       x = "ZIP Code",
+       y = "Frequency") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Combine all histograms using patchwork
+combined_histograms <- (hist_adj2007 | hist_distance | hist_acre) / 
+                       (hist_squarefeet | hist_bedrooms | hist_garage_spaces | hist_zip)
+
+# Display the combined histograms
+print(combined_histograms)
+```
+
+While the distribution of house prices is less right-skewed, we believe it still requires a log transformation to achieve better normality and improve the accuracy of our analysis. When we applied a log transformation to house price, the resulting distribution appears normal. This transformation is crucial for our analysis, as the key assumption is normal distribution of the response variable. By ensuring that our data meets this assumption, we improve the accuracy and reliability of our analysis. Figure 5 shows us a distribution with better normality. Thus, we will use house price with log transformation for future analysis.
+
+```{r echo = FALSE, message = FALSE, warning=FALSE, fig.height=3, fig.width=4}
+#| fig-cap: "House Price Distribution with Log Transformation"
+
+data$log_price2007 <- log(data$price2007)
+
+ggplot(data, aes(x = log_price2007)) +
+  geom_histogram(binwidth = 0.1, fill = "lightgrey", color = "black", alpha = 0.5) +
+  labs(title = "Log House Prices in 2007", x = "Log Price", y = "Frequency") + 
+  theme_minimal()
+```
+
+We further our understanding of the relationship between various predictor variables and house values through looking at their respective scatter plots and box plots (Figure 5). We found a strong negative correlation between the distance to the rail trail and house values, indicating that homes closer to the rail trail tend to have higher values. Although there was no significant association between property size and house values, we included property size in our model due to its general importance in determining house value. We observed a strong positive correlation between square footage and house value, as well as a positive correlation between the number of bedrooms and house value. Similarly, the number of garage spaces positively correlated with house values, with notable variability in prices for homes with two garage spaces. Additionally, houses in zip code 1060 were generally more expensive but exhibited higher price variance compared to those in zip code 1062, possibly due to their proximity to the rail trail.
+
+```{r echo = FALSE, message = FALSE, warning=FALSE, fig.height=3, fig.width=6}
+#| fig-cap: " Relationships of Main Variables of Interest"
+
+# Convert bedrooms, garage_spaces, and zip to factors
+data$bedrooms <- as.factor(data$bedrooms)
+data$garage_spaces <- as.factor(data$garage_spaces)
+data$zip <- as.factor(data$zip)
+
+# Create the scatter plot for house value vs. distance
+plot_distance <- ggplot(data, aes(x = distance, y = adj2007)) +
+  geom_point(color = "black", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "House Value vs Distance to Rail Trail",
+       x = "Distance to Rail Trail",
+       y = "House Value ") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the scatter plot for house value vs. acre
+plot_acre <- ggplot(data, aes(x = acre, y = adj2007)) +
+  geom_point(color = "black", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "House Value vs Property Size (acres)",
+       x = "Property Size (acres)",
+       y = "House Value ") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the scatter plot for house value vs. square footage
+plot_squarefeet <- ggplot(data, aes(x = squarefeet, y = adj2007)) +
+  geom_point(color = "black", alpha = 0.5) +
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(title = "House Value vs Square Footage",
+       x = "Square Footage",
+       y = "House Value ") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the box plot for house value vs. bedrooms
+plot_bedrooms <- ggplot(data, aes(x = bedrooms, y = adj2007)) +
+  geom_boxplot(fill = "lightblue", color = "black", alpha = 0.5) +
+  labs(title = "House Value vs Number of Bedrooms",
+       x = "Number of Bedrooms",
+       y = "House Value ") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the box plot for house value vs. garage spaces
+plot_garage_spaces <- ggplot(data, aes(x = garage_spaces, y = adj2007)) +
+  geom_boxplot(fill = "lightgreen", color = "black", alpha = 0.5) +
+  labs(title = "House Value vs Number of Garage Spaces",
+       x = "Number of Garage Spaces",
+       y = "House Value ") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Create the box plot for house value vs. zip
+plot_zip <- ggplot(data, aes(x = zip, y = adj2007)) +
+  geom_boxplot(fill = "lightcoral", color = "black", alpha = 0.5) +
+  labs(title = "House Value vs ZIP Code",
+       x = "ZIP Code",
+       y = "House Value ") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+
+# Combine all plots using patchwork
+combined_plot <- (plot_distance | plot_acre | plot_squarefeet) / 
+                 (plot_bedrooms | plot_garage_spaces | plot_zip)
+
+# Display the combined plot
+print(combined_plot)
+
+```
+
+\pagebreak
+
+## Methods
+
+After preparing the data, we will adopt the linear regression method with the log-transformed house price as the response variable and six covariates: distance to the rail trail, property size, square footage, number of bedrooms, number of garage spaces, and zip code. Here, variables distance, acre, square footage are treated as continuous variables, while number of garage spaces, number of bedrooms and zip code are treated as categorical variables. As we run the model, we will check the assumptions of the linear regression model, including linearity, normality, homoscedasticity, and independence of residuals, and perform diagnostic checks to validate the model.
+
+The final model is specified as:
+
+$\log{Price} =\beta_0 + \beta_1 Distance + \beta_2 Acre + \beta_3 Sqft + \beta_4 B2 + \beta_5 B3 + \beta_6 B4 + \beta_7 G1 + \beta_8 G2 + \beta_9 Z + \epsilon$
+
+In our model, the notation of each variable is as follows:
+
+-   LogPrice: The logged form of price of each property
+-   Distance: The distance from each property to the nearest rail trail
+-   Acre: The size measurement of each property
+-   Sqft: The inner area measurement of each property
+-   B2: Dummy variable, which equals 1 if the property has two bedrooms, 0 otherwise
+-   B3: Dummy variable, which equals 1 if the property has three bedrooms, 0 otherwise
+-   B4: Dummy variable, which equals 1 if the property has four bedrooms, 0 otherwise
+-   G1: Dummy variable, which equals 1 if the property has one garage, 0 otherwise
+-   G2: Dummy variable, which equals 1 if the property has two garages, 0 otherwise
+-   Z: Dummy variable, which equals 1 if the zip code is 01062 and 0 if the zip code is 01060
+
+Table 1, 2 and 3 below illustrate the value of each categorical given different attributes of each house.
+
+```{r echo = FALSE, message = FALSE, warning=FALSE}
+# Create a data frame with number of bedrooms and dummy variables
+bedrooms_data <- data.frame(
+  Bedrooms = c("One Bedroom", "Two Bedrooms", "Three Bedrooms", "Four Bedrooms"),
+  B2 = c(0, 1, 0, 0),
+  B3 = c(0, 0, 1, 0),
+  B4 = c(0, 0, 0, 1)
+)
+
+library(knitr)
+knitr::kable(bedrooms_data, caption = "Dummy Variables for Number of Bedrooms")
+```
+
+```{r echo = FALSE, message = FALSE, warning=FALSE}
+# Create a data frame with number of garage spaces and dummy variables
+garage_data <- data.frame(
+  Garage_Spaces = c("No Garage", "One Garage", "Two Garages"),
+  G1 = c(0, 1, 0),
+  G2 = c(0, 0, 1)
+)
+
+knitr::kable(garage_data, caption = "Dummy Variables for Number of Garage Spaces")
+
+```
+
+```{r echo = FALSE, message = FALSE, warning=FALSE}
+# Create a data frame with number of garage spaces and dummy variables
+zip_data <- data.frame(
+  Zip_Code = c("1060", "1062"),
+  Z = c(0, 1)
+)
+
+knitr::kable(zip_data, caption = "Dummy Variables for Zip Code")
+```
+
+\pagebreak
+
+We used a partial F-test to determine whether the variable Distance significantly improves the model's ability to predict house prices, given the other predictors (Acre, SquareFeet, Bedrooms, Garage_Spaces, and Zip code). To do this we fit two models, the first is the full model which includes all the predictors—Distance, Acre, SquareFeet, Bedrooms, Garage_Spaces, and Zip. The second is the reduced model which excludes the predictor Distance.
+
+$H_0$: The coefficient for Distance is equal to zero.
+
+$H_A$: The coefficient for Distance is significantly different from zero.
+
+We calculate the partial F-statistic based on the sum of squared residuals (SSR) from both models:
+
+```{=tex}
+\begin{center}
+
+$F = \frac{\left( SSR_{\text{reduced}} - SSR_{\text{full}} \right) / \left( p_{\text{full}} - p_{\text{reduced}} \right)}{SSR_{\text{full}} / \left( n - p_{\text{full}} \right)}$
+
+\end{center}
+```
+-   $SSR_\text{reduced}​$ is the sum of squared residuals from the reduced model.
+
+-   $SSR_\text{full}​$ is the sum of squared residuals from the full model.
+
+-   $p_\text{full}​$ and $p_\text{reduced}​$ are the number of parameters in the full and reduced models, respectively.
+
+-   $n$ is the sample size.
+
+\pagebreak
+
+## Results
+
+```{r echo = FALSE, message = FALSE, warning=FALSE, include=FALSE}
+model <- lm(log(adj2007) ~ distance + acre + squarefeet + bedrooms + garage_spaces+ zip, data = data)
+
+summary(model)
+```
+
+```{r echo = FALSE}
+# Load necessary library
+library(knitr)
+
+# Create a data frame for the coefficients
+coefficients <- data.frame(
+  Term = c("(Intercept)", "Distance", "Acre", "SquareFeet", 
+           "Bedrooms2", "Bedrooms3", "Bedrooms4", 
+           "Garage_Spaces1", "Garage_Spaces2", "Zip1062"),
+  Estimate = c(5.05477, -0.06390, 0.13047, 0.38745, 
+               0.15637, 0.21241, 0.13146, 
+               0.01426, 0.03142, -0.09759),
+  Std_Error = c(0.08621, 0.01598, 0.13245, 0.04740, 
+                0.08729, 0.08565, 0.09532, 
+                0.03306, 0.03822, 0.03658),
+  T_Value = c(58.632, -3.998, 0.985, 8.175, 
+              1.791, 2.480, 1.379, 
+              0.431, 0.822, -2.668),
+  Pr_t = c("< 2e-16", "0.000135", "0.327370", "2.34e-12", 
+           "0.076740", "0.015096", "0.171419", 
+           "0.667379", "0.413281", "0.009124"),
+  Significance = c("***", "***", "", "***", 
+                   ".", "*", "", "", "", "**")
+)
+
+# Round all numeric columns to 2 decimal places
+coefficients$Estimate <- round(coefficients$Estimate, 4)
+coefficients$Std_Error <- round(coefficients$Std_Error, 4)
+coefficients$T_Value <- round(coefficients$T_Value, 4)
+
+# Calculate the lower and upper bounds of the 95% confidence intervals and round them
+coefficients$Lower_Bound <- round(coefficients$Estimate - 1.96 * coefficients$Std_Error, 4)
+coefficients$Upper_Bound <- round(coefficients$Estimate + 1.96 * coefficients$Std_Error, 4)
+
+# Reorder the columns to place lower and upper bounds after the estimate
+coefficients <- coefficients[, c("Term", "Estimate", "Lower_Bound", "Upper_Bound", 
+                                 "Std_Error", "T_Value", "Pr_t", "Significance")]
+
+
+# Model summary statistics
+model_summary <- data.frame(
+  Metric = c("Residual Standard Error", "Multiple R-Squared", "Adjusted R-Squared", "F-Statistic", "P-Value"),
+  Value = c(0.1258, 0.7722, 0.7484, "32.39 on 9 and 86 DF", "< 2.2e-16")
+)
+
+# Display the tables
+kable(coefficients, caption = "Model Coefficients")
+kable(model_summary, caption = "Model Summary Statistics")
+
+```
+
+```{r echo = FALSE, message = FALSE, warning=FALSE, fig.height=4, fig.width=5}
+#| fig-cap: "Diagnostic Plots of the Final Model"
+library(car)
+library(ggplotify)
+
+# Predictions and residuals
+y_pred <- predict(model)
+standardized_residuals <- rstandard(model)
+studentized_residuals <- rstudent(model)
+leverage <- hatvalues(model)
+cooks_d <- cooks.distance(model)
+
+# Define a theme with smaller text
+small_text_theme <- theme_minimal() +
+  theme(
+    plot.title = element_text(size = 6),
+    axis.title = element_text(size = 6),
+    axis.text = element_text(size = 6)
+  )
+
+# Observed vs. Predicted
+p1 <- ggplot(data, aes(x = y_pred, y = adj2007)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(intercept = 0, slope = 1, color = "blue") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Add red line
+  labs(title = "Observed vs. Predicted", x = "Predicted y", y = "Observed y") +
+  small_text_theme
+
+# Standardized Residuals vs. Predicted
+p2 <- ggplot(data, aes(x = y_pred, y = standardized_residuals)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "Standardized Residuals vs. Predicted", x = "Predicted y", y = "Standardized Residuals") +
+  small_text_theme
+
+# Standardized Residuals vs. Distance
+p3 <- ggplot(data, aes(x = distance, y = standardized_residuals)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  labs(title = "Standardized Residuals vs. Distance", x = "Distance", y = "Standardized Residuals") +
+  small_text_theme
+
+# √|Standardized Residuals| vs. Predicted
+p4 <- ggplot(data, aes(x = y_pred, y = sqrt(abs(standardized_residuals)))) +
+  geom_point(alpha = 0.5) +
+  labs(
+    title = expression(sqrt("|Standardized Residuals|") ~ " vs. Predicted"),
+    x = "Predicted y",
+    y = expression(sqrt("|Standardized Residuals|"))
+  ) +
+  small_text_theme
+
+# Studentized Residuals vs. Predicted
+p5 <- ggplot(data, aes(x = y_pred, y = studentized_residuals)) +
+  geom_point(alpha = 0.5) +
+  geom_hline(yintercept = c(-2, 2), color = "red", linetype = "dashed") +
+  labs(title = "Studentized Residuals vs. Predicted", x = "Predicted y", y = "Studentized Residuals") +
+  small_text_theme
+
+# Function to calculate envelope points
+calculate_envelope <- function(n, conf = 0.95) {
+  a <- qnorm((1 + conf) / 2)
+  se <- a * sqrt(1/n + (n-1:n)^2 / (n*(n-1)^2))
+  lower <- -se
+  upper <- se
+  data.frame(lower = lower, upper = upper)
+}
+
+# Updated function to create Q-Q plot with envelopes
+plot_qq_with_envelope <- function(model) {
+  # Get standardized residuals
+  std_resid <- rstandard(model)
+  n <- length(std_resid)
+
+  # Calculate Q-Q plot points
+  qq_data <- qqnorm(std_resid, plot.it = FALSE)
+
+  # Calculate envelope points
+  env <- calculate_envelope(n)
+
+  # Combine data
+  df <- data.frame(
+    theoretical = qq_data$x,
+    observed = qq_data$y,
+    lower = qq_data$x + env$lower,
+    upper = qq_data$x + env$upper
+  )
+
+  ggplot(df, aes(x = theoretical, y = observed)) +
+    geom_ribbon(aes(ymin = lower, ymax = upper), fill = "darkgrey", alpha = 0.5) +
+    geom_point(alpha = 0.5) +
+    geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+    labs(x = "Theoretical Quantiles", y = "Standardized Residuals", title = "Normal Q-Q Plot with 95% CI") +
+    theme_minimal() +
+    theme(plot.title = element_text(size = 6, color = "black"),
+        axis.title = element_text(size = 6, color = "black"))
+}
+
+# Q-Q Plot with Envelope
+p6 <- plot_qq_with_envelope(model)
+
+# Leverage
+p7 <- ggplot(data, aes(x = seq_along(leverage), y = leverage)) +
+  geom_bar(stat = "identity", alpha = 0.5) +
+  labs(title = "Leverage", x = "Observation", y = "Leverage") +
+  small_text_theme
+
+# Cook's Distance
+p8 <- ggplot(data, aes(x = seq_along(cooks_d), y = cooks_d)) +
+  geom_bar(stat = "identity", alpha = 0.5) +
+  labs(title = "Cook's Distance", x = "Observation", y = "Cook's Distance") +
+  small_text_theme
+
+# Combine the plots using patchwork
+(p1 | p2 | p3) /
+(p4 | p5 | p6) /
+(p7 | p8)
+
+
+```
+
+\pagebreak
+
+## Discussion
+
+::: first-line-indent
+The model had a multiple R-squared of 0.7722 which suggests that our model explains 77.22% of the variation in house values.  Additionally, the residuals ranged from -0.38317 to 0.34117, with a median close to zero, which also indicates a good fit of the model.
+:::
+
+::: first-line-indent
+The resulting p-value from the F-test shows that Distance is significant because the p-value associated with Distance is very small (p = 0.000135), much lower than the typical significance threshold of 0.05. Since the p-value is less than 0.05, we reject the null hypothesis and conclude that Distance is a significant predictor of house prices. However, we did not formally check for multicollinearity, meaning there could be correlations between other variables thay act as mediators, potentially affecting the accuracy of our estimates. While we attempted to address this by carefully considering and removing potential mediators in our DAG, it is possible that some remain. If so, the estimated coefficients may be unstable, making it difficult to fully isolate the effect of distance on house prices.
+:::
+
+::: first-line-indent
+The diagnostic plots of the regression model suggest that the model performs well, and most assumptions are satisfied. The Observed vs Predicted plot shows the model captures the trend well, as there is mostly a linear trend between the two and no obvious curvature. The Standardized Residuals vs Predicted plot shows some slight fanning out of residuals as the predicted values increase. Mild heteroscedasticity in linear regression can lead to inefficient estimators, unreliable standard errors, and potentially invalidate our inferential tools (hypothesis tests and confidence intervals). It also compromises the model’s predictive power, as it suggests the model doesn’t fully capture the data patterns.  We will be weary of this when using our model to interpret results. In the Q-Q plot, the residuals generally follow the trendline, supporting the assumption of normality. There are few points outside the 95% confidence intervals which is to be expected for such a large number of data points.  The Scale-Location plot shows relatively even spread of residuals, although a subtle downward trend once again hints at possible heteroscedasticity.  The Residuals vs Leverage plot reveals a few high leverage points, which may have a disproportionate effect on the model but the Cook’s Distance Plot shows there are no significant influential points that we need to be concerned about.
+:::
+
+::: first-line-indent
+Our regression analysis provides several key insights into the factors influencing house prices in Northampton, Massachusetts, and specifically addresses the impact of proximity to rail trails.
+:::
+
+#### Interpretation of Results
+
+Proximity to Rail Trail:
+
+-   The coefficient for distance to the rail trail is -0.06390, with a 95% confidence interval ranging from -0.09522 to -0.03258. This means that if we were to take 100 different samples and compute a 95% confidence interval for each sample, approximately 95 of those intervals would contain the true effect of distance on house prices. Since the entire confidence interval is negative, we can be confident that increasing the distance from the rail trail is associated with lower house prices. Specifically, the interval suggests that for each additional mile from the rail trail, house prices decrease by between 3.26% and 9.52%. This finding reinforces the hypothesis that homes closer to the rail trail are more attractive and thus command higher prices.
+
+Square Footage:
+
+-   The coefficient for square footage is 0.38745, with a 95% confidence interval ranging from 0.29455 to 0.48035. The interval indicates a strong and statistically significant positive relationship between square footage and house prices. For every 1000 square feet of additional space, house prices increase between 29.46% and 48.04%. The fact that the confidence interval is well above zero reinforces the reliability of this positive relationship, consistent with market expectations that larger homes tend to have higher values.
+
+\pagebreak
+
+Number of Bedrooms:
+
+-   The coefficient for homes with 3 bedrooms is 0.21241, with a 95% confidence interval ranging from 0.04455 to 0.38027. Since the confidence interval does not include zero, this indicates a statistically significant positive impact of having 3 bedrooms on house prices. Homes with 3 bedrooms are estimated to be valued between 4.46% and 38.03% higher than homes with fewer bedrooms, highlighting the importance of this number of bedrooms in the housing market.
+-   The coefficient for 2 bedrooms is 0.15637, with a confidence interval from -0.01472 to 0.32746, and the coefficient for 4 bedrooms is 0.13146, with a confidence interval from -0.05550 to 0.31843. Both intervals cross zero, meaning the effects of having 2 or 4 bedrooms are not statistically significant at the 95% confidence level. While the number of bedrooms is treated as a categorical variable, this suggests that 3-bedroom homes stand out in significance, while homes with 2 or 4 bedrooms do not significantly affect house prices compared to 1 bedroom homes.
+
+Number of Garage Spaces:
+
+-   The coefficient for 1 garage space is 0.01426, with a 95% confidence interval ranging from -0.05123 to 0.07974. Since the interval includes zero, this indicates that the number of garage spaces does not have a statistically significant effect on house prices. The coefficient for 2 garage spaces is 0.03142, with a confidence interval from -0.04399 to 0.10684. Again, the interval crosses zero, showing that the number of garage spaces does not have a significant impact on house prices at the 95% confidence level.
+
+Zip Code:
+
+-   The coefficient for zip code 01062 is -0.09759, with a 95% confidence interval ranging from -0.16952 to -0.02566. The interval does not include zero, confirming a statistically significant negative effect on house prices for homes in this zip code compared to those in zip code 01060. Homes in 01062 are priced between 2.57% and 16.95% lower than those in 01060, which could reflect the latter's closer proximity to the rail trail, making it a more desirable location.
+
+The primary question of our study was whether rail trails are attractive for people buying homes, who might be willing to pay more for a house closer to a rail trail. Our analysis provides strong evidence that proximity to the rail trail is indeed a significant factor in determining house prices. Homes closer to the rail trail tend to have higher values, suggesting that rail trails are an attractive feature for home buyers. This finding is important for Acme Homes, LLC, as it indicates that developing homes near rail trails could be a profitable strategy.
+
+However there are some limitations to our study. As an observational study, we can identify correlations between proximity to rail trails and house prices, but we cannot establish causality. Unobserved factors such as neighborhood quality or proximity to other amenities mau also influence house prices, which we were unable to control for. Additionally, our analysis focuses on homes with fewer than 5 bedrooms and up to 2 garage spaces, so the results may not generalize to larger properties. We also did not include interaction terms, which assumes the effect of distance from the rail trail is consistent across homes of different sizes and characteristics—an assumption that may not always hold.
+
+Despite these limitations, our results highlight the importance of considering proximity to rail trails in real estate development and pricing strategies. By focusing on areas near rail trails, Acme Homes, LLC can potentially increase the value and attractiveness of their properties.
